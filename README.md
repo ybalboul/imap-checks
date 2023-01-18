@@ -1,2 +1,2 @@
 # nagios-email-checks
-python script allowing you to send email and check email intended for nagios checks
+Two scripts I made at work that is used for sending email and checking email, which is intended to be used for Nagios checks. The current main use is for verifying external email is working, the scripts have mulitiple parameters allowing you to change what server you are sending from/receiving, who is sending the email, etc. Which allows the script to be used for various Nagios checks.
