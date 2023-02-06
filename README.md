@@ -5,4 +5,4 @@ sending an email
 > ./send_email.py -t [email address sending to] -f [email being sent from] -s [smtp server sending via] [OPTIONAL] -S [custom email subject, by default "email check"]
 
 verifying email has been received 
-> ./external_email_check.py -u [user] -f [filter inbox via from] -s [mail server checking] [OPTIONAL] -t [time range to check for, default is 5 minutes], -P [port for server, default is 993] -S [email subject, default "email check"] -d [deletes found emails] -p [password to login, if not called getpass will prompt for user password]
+> ./imap_check.py -u [user] -f [filter inbox via from] -s [mail server checking] [OPTIONAL] -t [time range to check for, default is 5 minutes], -P [port for server, default is 993] -S [email subject, default "email check"] -d [deletes found emails] -p [password to login, if not called getpass will prompt for user password]
