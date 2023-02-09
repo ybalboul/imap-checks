@@ -31,6 +31,10 @@ def externalVerification(imap, user, password, delete, time, port, fromAddress, 
     mailList = ids.split()
     externalStatus = False
 
+    if len(mailList) == 0:
+        print(f'no mail has been found matching your criteria!\nsubject: {subject}\nfrom: {fromAddress}\nuser: {user}\nserver: {imap}')
+        sys.exit(2)
+
     for i in mailList:
         res, data = mail.fetch(i, '(RFC822)')
         for x in data:
@@ -66,7 +70,7 @@ def externalVerification(imap, user, password, delete, time, port, fromAddress, 
 
     mail.close()
     mail.logout()
-    return externalStatus, date, to, fromAddress, subjectEmail
+    return externalStatus, date, to, fromAddress, subjectEmail, len(mailList)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -97,13 +101,13 @@ def main():
     signal.alarm(10) # sets timeout limit to 10s
 
     try:    
-        status, date, to, fromAddress, subject = externalVerification(args.server, args.user, password, args.delete, args.time, args.port, args.fromAddress, args.subject.strip())
+        status, date, to, fromAddress, subject, amountFound = externalVerification(args.server, args.user, password, args.delete, args.time, args.port, args.fromAddress, args.subject.strip())
     except Exception as e:
         print(e)
         sys.exit(2)
 
     if status:
-        print(f'email found!\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\ndate: {date}\nserver: {args.server}\ndeletion: {args.delete}') 
+        print(f'email found!\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\ndate: {date}\nserver: {args.server}\namount found: {amountFound}\ndeletion: {args.delete}') 
         sys.exit(0) # mail found
     else:
         print(f'failed to find specified mail with in last {args.time} minutes!\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\nserver: {args.server}')
