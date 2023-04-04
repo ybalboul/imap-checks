@@ -7,12 +7,13 @@ import argparse
 import getpass
 import socket
 import signal
+import re
 from email.utils import parsedate_tz, mktime_tz
 
 def timeout(signum, frame):
     raise Exception('exceeded 10s timeout limit!') # sets exception for timeout
 
-def externalVerification(imap, user, password, delete, time, port, fromAddress, subject):
+def externalVerification(imap, user, password, delete, time, port, fromAddress, subject, regexStr, regexCheck):
     try:
         mail = imaplib.IMAP4_SSL(imap, port)
     except:
@@ -41,10 +42,25 @@ def externalVerification(imap, user, password, delete, time, port, fromAddress, 
             if isinstance(x, tuple):
                 part = x[1].decode('utf-8')
                 msg = email.message_from_string(part)
+                bodyPayload = msg.get_payload(decode=True) # recieves body of email
+                bodyEmail = bodyPayload.decode()
                 subjectEmail = msg['Subject']
                 date = msg['Date']
                 to = msg['To']
                 fromAddress = msg['From']
+                
+                # if something in the body of the email matches your regex search, we will later exit 0, 1, or 2 depending on if we are searching for something considered bad or good
+                regexExitStatus = None
+                if not regexStr == None and regexCheck == True:
+                    if re.search(regexStr, bodyEmail): # searching for good
+                        regexExitStatus = 0
+                    elif re.search(regexStr, bodyEmail) == None: # can't find
+                        regexExitStatus = 1
+                elif not regexStr == None and regexCheck == False:
+                    if re.search(regexStr, bodyEmail): # searching for bad
+                        regexExitStatus = 2
+                    elif re.search(regexStr, bodyEmail) == None: # can't find
+                        regexExitStatus = 1
 
                 # marks current email for deletion
                 if delete:
@@ -70,7 +86,9 @@ def externalVerification(imap, user, password, delete, time, port, fromAddress, 
 
     mail.close()
     mail.logout()
-    return externalStatus, date, to, fromAddress, subjectEmail, len(mailList)
+
+    return externalStatus, date, to, fromAddress, subjectEmail, len(mailList), regexExitStatus
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -84,12 +102,12 @@ def main():
     parser.add_argument('-P', '--port', required=False, action='store', default=993, help='server port, DEFAULT=993')
     parser.add_argument('-f', '--fromAddress', required=True, action='store', help='filters email from')
     parser.add_argument('-S', '--subject', required=True, action='store', type=str, help='filters email subject')
+    parser.add_argument('-r', '--regexGood', required=False, action='store', type=str, help='regex for body, exits happy if found')
+    parser.add_argument('-R', '--regexBad', required=False, action='store', type=str, help='regex for body, exits unhappy if found')
+
     args = parser.parse_args()
 
     # checks if you passed a password as an argurment
-    password = args.password
-    if password == None:
-        password = getpass.getpass()
     
     try:
         socket.gethostbyname(args.server)
@@ -97,21 +115,43 @@ def main():
         print(f'Hostname is unknown: {args.server}')
         sys.exit(2)
 
+    password = args.password
+    if password == None:
+        password = getpass.getpass()
+
+    regexCheck = None
+    regexStr = None
+    if not args.regexGood == None:
+        regexCheck = True # we are checking for something good, so we can exit happy (good exit (0))
+        regexStr = args.regexGood
+    elif not args.regexBad == None:
+        regexCheck = False # we are checking for a error, so we can exit upset (critical exit(2))
+        regexStr = args.regexBad
+    
     signal.signal(signal.SIGALRM, timeout)
     signal.alarm(10) # sets timeout limit to 10s
 
-    try:    
-        status, date, to, fromAddress, subject, amountFound = externalVerification(args.server, args.user, password, args.delete, args.time, args.port, args.fromAddress, args.subject.strip())
+    try: 
+        status, date, to, fromAddress, subject, amountFound, regexExitStatus = externalVerification(args.server, args.user, password, args.delete, args.time, args.port, args.fromAddress, args.subject.strip(), regexStr, regexCheck)
     except Exception as e:
         print(e)
         sys.exit(2)
 
     if status:
-        print(f'email found!\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\ndate: {date}\nserver: {args.server}\namount found: {amountFound}\ndeletion: {args.delete}') 
-        sys.exit(0) # mail found
+        if regexExitStatus == 0:
+            print(f'email found!\nregex search: "{regexStr}", was found exiting with 0!\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\ndate: {date}\nserver: {args.server}\namount found: {amountFound}\ndeletion: {args.delete}') 
+            sys.exit(0) # mail found with good regex result
+        elif regexExitStatus == 2:
+            print(f'email found!\nregex search: "{regexStr}", was found exiting with 2!\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\ndate: {date}\nserver: {args.server}\namount found: {amountFound}\ndeletion: {args.delete}') 
+            sys.exit(2) # mail found with bad regex result
+        elif regexExitStatus == 1:
+            print(f'email found!\nregex search: "{regexStr}", was not found, exiting with 1!\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\ndate: {date}\nserver: {args.server}\namount found: {amountFound}\ndeletion: {args.delete}') 
+            sys.exit(1) # mail found but regex not found
+        else:
+            print(f'email found!\nregex search: {regexStr}\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\ndate: {date}\nserver: {args.server}\namount found: {amountFound}\ndeletion: {args.delete}') 
     else:
-        print(f'failed to find specified mail with in last {args.time} minutes!\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\nserver: {args.server}')
-        sys.exit(2) # mail not found
+            print(f'failed to find specified mail with in last {args.time} minutes!\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\nserver: {args.server}')
+            sys.exit(2) # mail not found
 
 if __name__ == '__main__':
     main()
