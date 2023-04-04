@@ -11,7 +11,7 @@ from email.message import EmailMessage
 def timeout(signum, frame):
     raise Exception('exceeded 10s timeout limit!') # sets exception for timeout
 
-def sendEmail(to, server, fromAddress, subject, body, user, password, port):
+def sendEmail(to, server, fromAddress, subject, body, user, password, port, latency):
     start = time.perf_counter()
     try:
         message = EmailMessage()
@@ -25,7 +25,6 @@ def sendEmail(to, server, fromAddress, subject, body, user, password, port):
                 s = smtplib.SMTP(server, port)
                 s.send_message(message)
                 end = time.perf_counter()
-
             except:
                 print(f'failed to send mail via: {server}:{port}')
                 sys.exit(2)
@@ -41,11 +40,17 @@ def sendEmail(to, server, fromAddress, subject, body, user, password, port):
                 sys.exit(2)
 
         s.quit()
-        print(f'mail sent successfully\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\nvia: {server}\nlatency: {end-start:0.4f}s')
-        sys.exit(0)
+
+        perfTime = end-start
+        if perfTime >= latency:
+            print(f'mail sent successfully\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\nvia: {server}\nlatency: {perfTime:0.4f}s >= {latency}s, exiting with 1!')
+            sys.exit(1)
+        else:
+            print(f'mail sent successfully\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\nvia: {server}\nlatency: {perfTime:0.4f}s')
+            sys.exit(0)
 
     except smtplib.SMTPException as e:
-        print(f'failed to send mail\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\nvia: {server}:{port}\nlatency: {end-start:0.4f}s')
+        print(f'failed to send mail\nsubject: {subject}\nto: {to}\nfrom: {fromAddress}\nvia: {server}:{port}')
         print(e)
         sys.exit(2) 
 
@@ -61,6 +66,7 @@ def main():
     parser.add_argument('-u', '--user', action='store', nargs='?', required=False, help='user')
     parser.add_argument('-p', '--password', action='store', nargs='?', required=False, help='password')
     parser.add_argument('-P', '--port', required=False, action='store', default=25, help='server port, DEFAULT=25')
+    parser.add_argument('-l', '--latency', action='store', type=float, required=False, default=2, help='latency, if higher than set amount exit with warning')
     args = parser.parse_args()
 
     try:
@@ -78,11 +84,15 @@ def main():
     if args.password == None and args.user != None:
         args.password = getpass.getpass()
 
+    if args.latency <= 0:
+        print("latency (-l), can't be <= zero!")
+        sys.exit(2)
+
     signal.signal(signal.SIGALRM, timeout)
     signal.alarm(10) # sets timeout limit to 10s
     
     try:
-        sendEmail(args.to, args.server, args.fromAddress, args.subject.strip(), args.body, args.user, args.password, args.port)
+        sendEmail(args.to, args.server, args.fromAddress, args.subject.strip(), args.body, args.user, args.password, args.port, args.latency)
     except Exception as e:
         print(e)
         sys.exit(2)
